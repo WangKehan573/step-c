@@ -1,0 +1,132 @@
+from ase import Atoms
+import torch
+import torchmetrics
+import schnetpack as spk
+import schnetpack.transform as trn
+import pytorch_lightning as pl
+import os
+import matplotlib.pyplot as plt
+import numpy as np
+from schnetpack.data import ASEAtomsData,AtomsDataModule
+from ase import io
+
+# load model
+forcetut = './forcetut_init9'
+model_path = forcetut
+best_model = torch.load(model_path)
+'''
+a = torch.tensor([42, 16, 16, 42, 42, 16, 16, 16, 16, 42, 42, 42, 16, 16, 16, 16, 
+        16, 16, 16, 42, 42, 16]) 
+
+b = torch.tensor([[-3.2346e-04,  1.8770e+00,  3.0927e+00],
+        #[ 4.8090e+00,  9.1016e-01,  4.6515e+00],
+        [ 4.7273e+00,  9.2429e-01,  1.6081e+00],
+        [ 3.2666e+00,  1.8060e+00,  1.0852e+01],
+        [-1.6075e+00,  4.6181e+00,  3.1284e+00],
+        [ 3.1157e-02,  3.7032e+00,  9.2576e+00],
+        [-1.5940e+00,  4.5818e+00,  7.7000e+00],
+        [-2.3598e-02,  3.6612e+00,  4.6991e+00],
+        [-2.6697e-02,  3.7568e+00,  1.5519e+00],
+        [-1.5699e+00,  4.5183e+00,  1.0865e+01],
+        [ 1.6180e+00,  4.5770e+00,  3.1601e+00],
+        [ 1.6124e+00,  8.7341e-01,  9.3494e+00],
+        [ 3.1969e+00,  3.6614e+00,  9.2901e+00],
+        [ 1.6525e+00,  4.6147e+00,  7.6854e+00],
+        [ 3.1736e+00,  3.7476e+00,  4.7773e+00],
+        [ 3.1777e+00,  3.7272e+00,  1.5247e+00],
+        [ 1.5958e+00,  4.5811e+00,  1.0845e+01],
+        [ 9.7034e-02,  1.8400e+00,  7.7382e+00],
+        #[ 1.6018e+00,  9.9563e-01,  4.6794e+00],
+        [ 1.6381e+00,  9.4052e-01,  1.5719e+00],
+        [ 2.9548e-02,  1.8684e+00,  1.0858e+01],
+        [ 3.1720e+00,  1.9534e+00,  3.1346e+00],
+        [ 4.8328e+00,  9.1946e-01,  9.2825e+00],
+        [ 3.1665e+00,  1.7971e+00,  7.7453e+00]])
+
+
+atoms = Atoms(
+    numbers=a, positions = b 
+)
+'''
+from ase import io
+#atoms = io.read('/data/2H_inference/forcetut/ase_calcs/optimization.extxyz')
+a = torch.tensor([42, 16, 16,16, 42, 42, 16, 16, 16, 16, 42, 42, 42, 16, 16, 16, 16, 16,
+        16, 16, 16, 42, 42, 16])
+b = torch.tensor([[-0.10280685 , 1.79874828 , 3.17703363],
+ [ 4.7536098,   0.79007155,  4.88024013],
+ [ 4.85591262 , 1.12335823 , 1.68004161],
+ [ 3.28661119 , 1.74685873, 10.76245827],
+ [-1.71368932 , 4.55674152 , 2.84262613],
+ [ 0.11041348 , 3.94671661 , 9.27978083],
+ [-1.68653405,  4.52110765 , 7.71312123],
+ [-0.3338818  , 3.71555855,  4.65429299],
+ [ 0.04471444 , 3.55296532 , 1.50086373],
+ [-1.70318717,  4.5137312,  10.8362533 ],
+ [ 1.42517479 , 4.589243 ,   3.20383292],
+ [ 1.58194249,  0.76967518 , 9.35013079],
+ [ 3.22064745 , 3.46646744 , 9.01979348],
+ [ 1.6518405 ,  4.5078791,   7.47904771],
+ [ 3.19630508 , 3.99831825,  4.7748417 ],
+ [ 3.1797218 ,  3.80504068 , 1.69323855],
+ [ 1.95204333 , 4.59008999, 10.75706828],
+ [-0.02885417 , 1.8787966,   7.90315511],
+ [ 1.63910687 , 1.16887619,  4.79536115],
+ [ 1.80875487 , 1.09321843,  1.77543537],
+ [ 0.23744402 , 2.07954577, 10.90778758],
+ [ 3.37583258 , 2.05404763,  3.35476739],
+ [ 4.75707687 , 0.7028002  , 9.13344604],
+ [ 3.06852208 , 1.48396518  ,7.5744317 ]])
+atoms = Atoms(
+    numbers=a, positions = b )
+
+atoms.set_pbc((True,True,True))
+
+atoms.set_cell([[6.39818,0,0],[-3.19909,5.540988 ,0],[0,0,12.42199]])
+
+
+#set up calculator
+
+calculator = spk.interfaces.SpkCalculator(
+    model_file=model_path,
+    neighbor_list=trn.ASENeighborList(cutoff=5.0),
+    energy_key='energy',
+    force_key='forces',
+    energy_unit="kcal/mol",
+    position_unit="Ang",
+)
+
+atoms.set_calculator(calculator)
+
+print("Prediction:")
+print("energy:", atoms.get_total_energy())
+print("forces:", atoms.get_forces())
+
+
+
+# Generate a directory for the ASE computations
+ase_dir =  'ase_init_calcs'
+
+if not os.path.exists(ase_dir):
+    os.mkdir(ase_dir)
+
+# Write a sample molecule
+molecule_path = os.path.join(ase_dir, 'mos2.xyz')
+io.write(molecule_path, atoms, format='xyz')
+
+
+#ASEinterface
+mos2_ase = spk.interfaces.AseInterface(
+    molecule_path,
+    ase_dir,
+    model_file=model_path,
+    neighbor_list=trn.ASENeighborList(cutoff=5.0),
+    energy_key='energy',
+    force_key='forces',
+    energy_unit="kcal/mol",
+    position_unit="Ang",
+    device="cpu",
+    dtype=torch.float64,
+)
+
+
+mos2_ase.optimize(fmax=4e-2)
